@@ -62,11 +62,10 @@ textarea{width:100%;height:110px;font-family:ui-monospace,Menlo,monospace;font-s
 
 <section><h2>Export / Import (JSON)</h2>
 <div class="bar">
-<button id="exp">Export (fill box &amp; copy)</button>
-<button id="imp">Import from box</button>
-<label>or file: <input type="file" id="file" accept=".json,application/json"></label>
+<button id="exp">Export to .json file</button>
+<button id="imp">Import from .json file</button>
+<input type="file" id="file" accept=".json,application/json" hidden>
 </div>
-<textarea id="json" placeholder="Exported JSON appears here. Paste JSON here and press Import to load it."></textarea>
 <div class="tot" id="msg"></div></section>
 </main>
 <script>
@@ -137,10 +136,14 @@ $('calc').onclick=()=>{
 };
 
 const msg=(t)=>{$('msg').textContent=t};
-$('exp').onclick=async()=>{
-  const s=JSON.stringify(S,null,2);$('json').value=s;
-  try{await navigator.clipboard.writeText(s);msg('Exported and copied to clipboard. Save it in a .json file.')}
-  catch(e){$('json').select();msg('Exported. Copy the text above and save it in a .json file.')}
+$('exp').onclick=()=>{
+  const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='budget-data.json';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  msg('Exported to budget-data.json');
 };
 function load(txt){
   try{
@@ -155,10 +158,11 @@ function load(txt){
     S=n;render();$('res').hidden=true;msg('Imported successfully. Press Calculate.');
   }catch(e){msg('Import failed: invalid JSON.')}
 }
-$('imp').onclick=()=>load($('json').value);
+$('imp').onclick=()=>$('file').click();
 $('file').onchange=e=>{
   const f=e.target.files[0];if(!f)return;
-  const r=new FileReader();r.onload=()=>{$('json').value=r.result;load(r.result)};r.readAsText(f);
+  const r=new FileReader();r.onload=()=>load(r.result);r.readAsText(f);
+  e.target.value='';
 };
 render();
 </script>
