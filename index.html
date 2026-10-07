@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Monthly Budget Calculator</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#1c2430;--mute:#6b7685;--line:#e1e5ea;--acc:#2f6fed;--good:#14804a;--bad:#c23b3b;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171c;--card:#1d222a;--text:#e8ecf1;--mute:#9099a6;--line:#2c333d;--acc:#6b9bff;--good:#4fcf8f;--bad:#ff7b7b}}
+:root[data-theme="dark"]{--bg:#14171c;--card:#1d222a;--text:#e8ecf1;--mute:#9099a6;--line:#2c333d;--acc:#6b9bff;--good:#4fcf8f;--bad:#ff7b7b}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:960px;margin:0 auto;padding:20px 14px 60px}
+h1{font-size:22px;margin:0 0 4px}
+.sub{color:var(--mute);margin:0 0 18px}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+h2{font-size:16px;margin:0 0 10px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:640px){.cols{grid-template-columns:1fr}}
+.col h3{margin:0 0 8px;font-size:14px}
+.row{display:flex;gap:6px;margin-bottom:6px}
+input,select,textarea{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 9px;min-width:0}
+.row .n{flex:1}.row .a{width:110px}
+.nm{font-weight:600;width:100%}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:8px;padding:7px 12px}
+button.p{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+button.x{padding:7px 9px;color:var(--mute)}
+.tot{color:var(--mute);font-size:13px;margin-top:6px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.res table{width:100%;border-collapse:collapse}
+.res td{padding:6px 0;border-bottom:1px solid var(--line)}
+.res td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.big{font-size:26px;font-weight:700}
+.good{color:var(--good)}.bad{color:var(--bad)}
+.box{overflow-x:auto}
+textarea{width:100%;height:110px;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+</style>
+</head>
+<body>
+<main>
+<h1>Monthly Budget Calculator</h1>
+<p class="sub">Add income, expenses and loan payments, then press Calculate to see how much you can save per month.</p>
+
+<section><h2>1. Income</h2><div class="cols">
+<div class="col" id="incA"></div><div class="col" id="incB"></div></div></section>
+
+<section><h2>2. Individual expenses</h2><div class="cols">
+<div class="col" id="expA"></div><div class="col" id="expB"></div></div></section>
+
+<section><h2>3. Combined expenses (living together)</h2><div class="col" id="comb"></div></section>
+
+<section><h2>4. Loan payback (per month)</h2><div class="col" id="loan"></div></section>
+
+<section><h2>Settings</h2>
+<label>Split combined expenses &amp; loans between the two: 
+<select id="split"><option value="equal">Equally (50/50)</option><option value="income">In proportion to income</option></select></label></section>
+
+<div class="bar"><button class="p" id="calc">Calculate</button></div>
+<section class="res" id="res" hidden></section>
+
+<section><h2>Export / Import (JSON)</h2>
+<div class="bar">
+<button id="exp">Export (fill box &amp; copy)</button>
+<button id="imp">Import from box</button>
+<label>or file: <input type="file" id="file" accept=".json,application/json"></label>
+</div>
+<textarea id="json" placeholder="Exported JSON appears here. Paste JSON here and press Import to load it."></textarea>
+<div class="tot" id="msg"></div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const blank=()=>({name:'',amt:''});
+let S={nameA:'Person A',nameB:'Person B',incA:[blank()],incB:[blank()],expA:[blank()],expB:[blank()],comb:[blank()],loan:[blank()],split:'equal'};
+const fmt=n=>(Math.round(n*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const sum=l=>l.reduce((t,r)=>t+(parseFloat(r.amt)||0),0);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// list id -> [state key, title kind, person key]
+const LISTS={incA:['A','Income'],incB:['B','Income'],expA:['A','Expenses'],expB:['B','Expenses'],comb:[null,'Combined expenses'],loan:[null,'Loans']};
+
+function render(){
+  for(const id in LISTS){
+    const [p,label]=LISTS[id];
+    let head='';
+    if(p){head=`<input class="nm" data-name="${p}" value="${esc(p==='A'?S.nameA:S.nameB)}" placeholder="Name"><div class="tot" style="margin:2px 0 8px">${label}</div>`}
+    const rows=S[id].map((r,i)=>`<div class="row"><input class="n" data-l="${id}" data-i="${i}" data-f="name" placeholder="Name" value="${esc(r.name)}"><input class="a" type="number" inputmode="decimal" step="any" min="0" data-l="${id}" data-i="${i}" data-f="amt" placeholder="Amount" value="${esc(r.amt)}"><button class="x" data-del="${id}" data-i="${i}" title="Remove">✕</button></div>`).join('');
+    $(id).innerHTML=head+rows+`<button data-add="${id}">+ Add</button><div class="tot" id="t_${id}"></div>`;
+    tot(id);
+  }
+  $('split').value=S.split;
+}
+function tot(id){const e=$('t_'+id);if(e)e.textContent='Total: '+fmt(sum(S[id]))}
+
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(t.dataset.l){S[t.dataset.l][t.dataset.i][t.dataset.f]=t.value;tot(t.dataset.l)}
+  else if(t.dataset.name){S['name'+t.dataset.name]=t.value}
+  else if(t.id==='split'){S.split=t.value}
+});
+document.addEventListener('click',e=>{
+  const t=e.target;
+  if(t.dataset.add){S[t.dataset.add].push(blank());render()}
+  if(t.dataset.del){const l=S[t.dataset.del];l.splice(t.dataset.i,1);if(!l.length)l.push(blank());render()}
+});
+
+$('calc').onclick=()=>{
+  const nA=S.nameA||'Person A',nB=S.nameB||'Person B';
+  const iA=sum(S.incA),iB=sum(S.incB),eA=sum(S.expA),eB=sum(S.expB),c=sum(S.comb),l=sum(S.loan);
+  const shared=c+l,income=iA+iB;
+  const shA=S.split==='income'&&income>0?iA/income:0.5, shB=1-shA;
+  const pA=eA+shared*shA,pB=eB+shared*shB;
+  const paid=eA+eB+c+l, saved=income-paid;
+  const cls=n=>n>=0?'good':'bad';
+  const row=(a,b,c2)=>`<tr><td>${a}</td><td>${b}</td></tr>`;
+  $('res').hidden=false;
+  $('res').innerHTML=`<h2>Result (per month)</h2>
+  <div class="cols"><div><div class="tot">Amount paid</div><div class="big">${fmt(paid)}</div></div>
+  <div><div class="tot">Amount saved</div><div class="big ${cls(saved)}">${fmt(saved)}</div></div></div>
+  <div class="box"><table style="margin-top:12px">
+  ${row('Total income',fmt(income))}
+  ${row('Individual expenses ('+esc(nA)+' + '+esc(nB)+')',fmt(eA+eB))}
+  ${row('Combined expenses',fmt(c))}
+  ${row('Loan payback',fmt(l))}
+  <tr><td><b>Total paid</b></td><td><b>${fmt(paid)}</b></td></tr>
+  <tr><td><b>Total saved</b></td><td class="${cls(saved)}"><b>${fmt(saved)}</b></td></tr></table></div>
+  <h2 style="margin-top:16px">Per person (shared costs split ${S.split==='income'?'by income':'50/50'})</h2>
+  <div class="box"><table><tr><td></td><td><b>${esc(nA)}</b></td><td><b>${esc(nB)}</b></td></tr></table>
+  <table>
+  <tr><td>Income</td><td>${fmt(iA)}</td><td>${fmt(iB)}</td></tr>
+  <tr><td>Own expenses</td><td>${fmt(eA)}</td><td>${fmt(eB)}</td></tr>
+  <tr><td>Share of combined + loans</td><td>${fmt(shared*shA)}</td><td>${fmt(shared*shB)}</td></tr>
+  <tr><td>Paid</td><td>${fmt(pA)}</td><td>${fmt(pB)}</td></tr>
+  <tr><td><b>Saved</b></td><td class="${cls(iA-pA)}"><b>${fmt(iA-pA)}</b></td><td class="${cls(iB-pB)}"><b>${fmt(iB-pB)}</b></td></tr></table></div>`;
+  $('res').scrollIntoView({behavior:'smooth',block:'nearest'});
+};
+
+const msg=(t)=>{$('msg').textContent=t};
+$('exp').onclick=async()=>{
+  const s=JSON.stringify(S,null,2);$('json').value=s;
+  try{await navigator.clipboard.writeText(s);msg('Exported and copied to clipboard. Save it in a .json file.')}
+  catch(e){$('json').select();msg('Exported. Copy the text above and save it in a .json file.')}
+};
+function load(txt){
+  try{
+    const d=JSON.parse(txt);
+    const n={...S};
+    for(const k of Object.keys(LISTS)){
+      if(Array.isArray(d[k])&&d[k].length)n[k]=d[k].map(r=>({name:String(r.name??''),amt:r.amt==null?'':String(r.amt)}));
+    }
+    if(typeof d.nameA==='string')n.nameA=d.nameA;
+    if(typeof d.nameB==='string')n.nameB=d.nameB;
+    if(d.split==='equal'||d.split==='income')n.split=d.split;
+    S=n;render();$('res').hidden=true;msg('Imported successfully. Press Calculate.');
+  }catch(e){msg('Import failed: invalid JSON.')}
+}
+$('imp').onclick=()=>load($('json').value);
+$('file').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=()=>{$('json').value=r.result;load(r.result)};r.readAsText(f);
+};
+render();
+</script>
+</body>
+</html>
