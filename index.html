@@ -15,15 +15,16 @@ body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-ap
 main{max-width:960px;margin:0 auto;padding:20px 14px 60px}
 h1{font-size:22px;margin:0 0 4px}
 .sub{color:var(--mute);margin:0 0 18px}
-section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+section{overflow:hidden;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
 h2{font-size:16px;margin:0 0 10px}
-.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-@media(max-width:640px){.cols{grid-template-columns:1fr}}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.col,.cols>div{min-width:0}
+@media(max-width:640px){.cols{grid-template-columns:minmax(0,1fr)}.row .a{width:96px}}
 .col h3{margin:0 0 8px;font-size:14px}
 .row{display:flex;gap:6px;margin-bottom:6px}
 input,select,textarea{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 9px;min-width:0}
-.row .n{flex:1}.row .a{width:110px}
-.nm{font-weight:600;width:100%}
+.row .n{flex:1 1 0;width:0}.row .a{flex:0 0 auto;width:110px}.row button{flex:0 0 auto}
+.nm{font-weight:600;width:100%;max-width:100%}
 button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:8px;padding:7px 12px}
 button.p{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
 button.x{padding:7px 9px;color:var(--mute)}
